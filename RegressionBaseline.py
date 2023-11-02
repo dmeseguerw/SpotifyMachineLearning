@@ -22,9 +22,9 @@ df = df[df['rank'] <= 50]
 # Extract class names for 'region' attribute and encode it
 raw_data = df.values
 streams_idx = df.columns.get_loc('streams')
-classLabels = raw_data[:,streams_idx]
-classNames = np.unique(classLabels)
-classDict = dict(zip(classNames,range(len(classNames))))
+# classLabels = raw_data[:,streams_idx]
+# classNames = np.unique(classLabels)
+# classDict = dict(zip(classNames,range(len(classNames))))
 
 # We want to encode all categorical attributes
 #    since there are so many possible values, we'll use the label encoder
@@ -49,7 +49,7 @@ classification_cols = ['language','valence','energy','danceability','artist_genr
 df_class = df[classification_cols]
 
 # Attributes for regression
-regression_cols = ["region","language","artist_genre","loudness","speechiness","danceability","valence"]
+regression_cols = ["loudness","speechiness","danceability","valence"]
 df_regression = df[regression_cols]
 
 
@@ -58,38 +58,41 @@ df_regression = df[regression_cols]
 # Since we have to do several encodings and lots of values
 #   the easiest way is to assign a numerical value to each unique value.
 
-columns_encoded = {}
-# For each attribute we want to encode:
-for col in regression_cols:
-    # Get unique values for each attribute
-    unique_values = df_regression[col].unique()
-    # We need to do a dictionary
-    encoding = {}
+# columns_encoded = {}
+# # For each attribute we want to encode:
+# for col in regression_cols:
+#     # Get unique values for each attribute
+#     unique_values = df_regression[col].unique()
+#     # We need to do a dictionary
+#     encoding = {}
     
-    # Assign unique value 'i' to 'attr_value' value in the possible values
-    for i, attr_value in enumerate(unique_values):
-        encoding[attr_value] = i
+#     # Assign unique value 'i' to 'attr_value' value in the possible values
+#     for i, attr_value in enumerate(unique_values):
+#         encoding[attr_value] = i
     
-    columns_encoded[col] = encoding
+#     columns_encoded[col] = encoding
     
-    # Apply encoding to original dataframe with map function
-    df_regression[col] = df_regression[col].map(encoding)
+#     # Apply encoding to original dataframe with map function
+#     df_regression[col] = df_regression[col].map(encoding)
 
 # ------------ DATA STANDARDIZATION -----------
 
 raw_data = df_regression.values
 # Now we can build the standardized matrix X and convert all values to float
 cols = range(0,len(df_regression.columns))
-X = raw_data[:, cols]
-X = X.astype(float)
+X = df_regression.to_numpy(dtype=np.float32)
 N, M = X.shape
 Xt = X - np.ones((N,1))*X.mean(axis=0) # Subtract mean
 Xt = Xt*(1/np.std(Xt,0)) # Divide by std deviation
-C = len(classNames)
+X = Xt
+# C = len(classNames)
 # print(X)
 
 # Extracting vector y based on the 'region' attribute
-y = np.array([classDict[cl] for cl in classLabels])
+# y = np.array([classDict[cl] for cl in classLabels])
+
+y = df['rank'].values
+print(y)
 
 K_outer = 10
 K_inner = 10
@@ -98,6 +101,8 @@ CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 # Initialize variable
 error_outer_train = np.empty((K_outer,1))
 error_outer_test = np.empty((K_outer,1))
+
+data_outer_test_length = []
 
 
 k_out=0
@@ -115,6 +120,8 @@ for train_outer_index, test_outer_index in CV_outer.split(X):
     error_inner_train = np.empty((K_inner,1))
     error_inner_test = np.empty((K_inner,1))
 
+    data_outer_test_length.append(float(len(y_test_outer)))
+
     k_in = 0
     for train_inner_index, test_inner_index in CV_inner.split(X):
         print('Computing CV inner fold: {0}/{1}..'.format(k_out+1,K_inner))
@@ -129,12 +136,17 @@ for train_outer_index, test_outer_index in CV_outer.split(X):
         k_in+=1
     
     # Compute squared error without using the input data at all
-    error_outer_train[k_out] = np.square(y_train_outer-y_train_outer.mean()).sum()/y_train_outer.shape[0]
-    error_outer_test[k_out] = np.square(y_test_outer-y_test_outer.mean()).sum()/y_test_outer.shape[0]
+    error_outer_train[k_out] = np.square(np.mean(y_train_outer)-y_train_outer).sum()/y_train_outer.shape[0]
+    error_outer_test[k_out] = np.square(np.mean(y_test_outer)-y_test_outer).sum()/y_test_outer.shape[0]
 
     k_out+=1
+
 
 print(error_inner_train)
 print(error_inner_test)
 print(error_outer_test)
 print(error_outer_train)
+
+## Estimate the generalization error
+generalization_error_baseline_model = np.mean(error_outer_test)
+print('est gen error of baseline model: ' +str(round(generalization_error_baseline_model, ndigits=3))) 
