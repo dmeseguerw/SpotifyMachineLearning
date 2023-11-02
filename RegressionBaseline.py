@@ -1,4 +1,4 @@
-# exercise 2.1.1
+from sklearn import preprocessing
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -48,10 +48,11 @@ df[cols_missing] = df[cols_missing].fillna(df[cols_missing].mean())
 classification_cols = ['language','valence','energy','danceability','artist_genre']
 df_class = df[classification_cols]
 
+
 # Attributes for regression
 regression_cols = ["loudness","speechiness","danceability","valence"]
 df_regression = df[regression_cols]
-
+print(df_regression)
 
 # ------------------ DATA TRANSFORMATION -------------------
 # We need to do some transformation for categorical attributes to numerical values.
@@ -77,21 +78,20 @@ df_regression = df[regression_cols]
 
 # ------------ DATA STANDARDIZATION -----------
 
-raw_data = df_regression.values
+# raw_data = df_regression.values
 # Now we can build the standardized matrix X and convert all values to float
-cols = range(0,len(df_regression.columns))
-X = df_regression.to_numpy(dtype=np.float32)
+# cols = range(0,len(df_regression.columns))
+X = df_regression.values
+# Standardize the feature matrix X
+scaler_X = preprocessing.StandardScaler()
+X = scaler_X.fit_transform(X)
+print(X)
 N, M = X.shape
-Xt = X - np.ones((N,1))*X.mean(axis=0) # Subtract mean
-Xt = Xt*(1/np.std(Xt,0)) # Divide by std deviation
-X = Xt
-# C = len(classNames)
-# print(X)
 
-# Extracting vector y based on the 'region' attribute
-# y = np.array([classDict[cl] for cl in classLabels])
-
-y = df['rank'].values
+y = df[['streams']].values/100000
+# scaler_Y = preprocessing.StandardScaler()
+# y = scaler_Y.fit_transform(y)
+# y = preprocessing.normalize(y)
 print(y)
 
 K_outer = 10
