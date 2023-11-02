@@ -7,6 +7,7 @@ from matplotlib.pyplot import figure, plot, title, xlabel, ylabel, show, legend
 import sklearn
 from matplotlib.pyplot import figure, plot, subplot, title, xlabel, ylabel, show, clim
 from scipy.io import loadmat
+from sklearn.calibration import LabelEncoder
 import sklearn.linear_model as lm
 from sklearn import model_selection
 import numpy as np
@@ -16,32 +17,13 @@ pd.options.mode.chained_assignment = None  # default='warn'
 filename = 'SpotifyDataSet.csv'
 df = pd.read_csv(filename)
 
-# Reduce df to only the observations where rank <= 50, only considering top 50 songs
-df = df[df['rank'] <= 50]
-
-# Extract class names for 'region' attribute and encode it
-raw_data = df.values
-streams_idx = df.columns.get_loc('streams')
-# classLabels = raw_data[:,streams_idx]
-# classNames = np.unique(classLabels)
-# classDict = dict(zip(classNames,range(len(classNames))))
-
 # We want to encode all categorical attributes
 #    since there are so many possible values, we'll use the label encoder
 #    function from sklearn.preprocessing
 
-# cols_to_encode = ['week','artist_names','artist_individual','artist_genre','track_name','country','region','language']
-# for col in cols_to_encode:
-#     df[col] = LabelEncoder().fit_transform(df[col])
-
-
-# We also want to fill the missing values with the median value:
-cols_missing = ['danceability', 'energy', 'key', 'mode', 'loudness', 
-                               'speechiness', 'acousticness', 'instrumentalness', 
-                               'liveness', 'valence', 'tempo', 'duration']
-
-
-df[cols_missing] = df[cols_missing].fillna(df[cols_missing].mean())
+cols_to_encode = ['week','artist_names','artist_individual','artist_genre','track_name','country','region','language']
+for col in cols_to_encode:
+    df[col] = LabelEncoder().fit_transform(df[col])
 
 
 # We'll reduce the df to only the attributes mentioned for the classification task
@@ -50,50 +32,22 @@ df_class = df[classification_cols]
 
 
 # Attributes for regression
-regression_cols = ["loudness","speechiness","danceability","valence"]
+regression_cols = ["artist_genre","language","region","loudness","speechiness","danceability","valence"]
 df_regression = df[regression_cols]
-print(df_regression)
 
-# ------------------ DATA TRANSFORMATION -------------------
-# We need to do some transformation for categorical attributes to numerical values.
-# Since we have to do several encodings and lots of values
-#   the easiest way is to assign a numerical value to each unique value.
 
-# columns_encoded = {}
-# # For each attribute we want to encode:
-# for col in regression_cols:
-#     # Get unique values for each attribute
-#     unique_values = df_regression[col].unique()
-#     # We need to do a dictionary
-#     encoding = {}
-    
-#     # Assign unique value 'i' to 'attr_value' value in the possible values
-#     for i, attr_value in enumerate(unique_values):
-#         encoding[attr_value] = i
-    
-#     columns_encoded[col] = encoding
-    
-#     # Apply encoding to original dataframe with map function
-#     df_regression[col] = df_regression[col].map(encoding)
 
 # ------------ DATA STANDARDIZATION -----------
 
-# raw_data = df_regression.values
-# Now we can build the standardized matrix X and convert all values to float
-# cols = range(0,len(df_regression.columns))
 X = df_regression.values
 # Standardize the feature matrix X
 scaler_X = preprocessing.StandardScaler()
 X = scaler_X.fit_transform(X)
-print(X)
 N, M = X.shape
 
-y = df[['streams']].values/100000
-# scaler_Y = preprocessing.StandardScaler()
-# y = scaler_Y.fit_transform(y)
-# y = preprocessing.normalize(y)
-print(y)
+y = df[['streams']].values
 
+# ---------------- STARTING K-Fold CV-------------------
 K_outer = 10
 K_inner = 10
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
