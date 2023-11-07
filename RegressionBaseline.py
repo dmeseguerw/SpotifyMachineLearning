@@ -1,3 +1,5 @@
+from numba import jit, cuda
+from scipy import stats
 from sklearn import preprocessing
 import numpy as np
 import pandas as pd
@@ -11,8 +13,10 @@ from sklearn.calibration import LabelEncoder
 import sklearn.linear_model as lm
 from sklearn import model_selection
 import numpy as np
+import torch
+from toolbox_02450 import train_neural_net, draw_neural_net
 pd.options.mode.chained_assignment = None  # default='warn'
-
+  
 # Read the CSV and create a pd df
 filename = 'SpotifyDataSet.csv'
 df = pd.read_csv(filename)
@@ -35,6 +39,11 @@ df_class = df[classification_cols]
 regression_cols = ["artist_genre","language","region","loudness","speechiness","danceability","valence"]
 df_regression = df[regression_cols]
 
+# Make figure for holding summaries (errors and learning curves)
+summaries, summaries_axes = plt.subplots(1,2, figsize=(10,5))
+# Make a list for storing assigned color of learning curve for up to K=10
+color_list = ['tab:orange', 'tab:green', 'tab:purple', 'tab:brown', 'tab:pink',
+              'tab:gray', 'tab:olive', 'tab:cyan', 'tab:red', 'tab:blue']
 
 
 # ------------ DATA STANDARDIZATION -----------
@@ -48,59 +57,159 @@ N, M = X.shape
 y = df[['streams']].values
 
 # ---------------- STARTING K-Fold CV-------------------
-K_outer = 10
-K_inner = 10
+K_outer = 5
+K_inner = 5
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
 CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 # Initialize variable
 error_outer_train = np.empty((K_outer,1))
 error_outer_test = np.empty((K_outer,1))
 
-data_outer_test_length = []
 
+# ----------------Parameters for ANN--------------------
+n_hidden_units = 2 # This is S in 2 level cross validation algorithm
+# Calculating the loss with Mean Squared Error
+loss_fn = torch.nn.MSELoss()
+n_replicates = 1
+max_iter = 10000
+outer_fold_errors_ANN = []
 
-k_out=0
+for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
+    print('Computing CV outer fold: {0}/{1}..'.format(k1+1,K_outer))
 
-for train_outer_index, test_outer_index in CV_outer.split(X):
-    print('Computing CV outer fold: {0}/{1}..'.format(k_out+1,K_outer))
-
-    # extract training and test set for current CV fold
+# -------- Setting BASELINE MODEL ------------
+    # Outer cross validation loop. First make the outer split into K1 folds
     X_train_outer = X[train_outer_index,:]
     y_train_outer = y[train_outer_index]
     X_test_outer = X[test_outer_index,:]
     y_test_outer = y[test_outer_index]
-    internal_cross_validation = 10
 
-    error_inner_train = np.empty((K_inner,1))
-    error_inner_test = np.empty((K_inner,1))
+# -------- Setting ANN MODEL ------------
+    # Outer cross validation loop. First make the outer split into K1 folds
+    X_train_outer_ANN = torch.Tensor(X_train_outer)
+    y_train_outer_ANN = torch.Tensor(y_train_outer)
+    X_test_outer_ANN = torch.Tensor(X_test_outer)
+    y_test_outer_ANN = torch.Tensor(y_test_outer)
 
-    data_outer_test_length.append(float(len(y_test_outer)))
+    # Initializing values for inner folds
+    inner_validation_errors_ANN = []
 
-    k_in = 0
-    for train_inner_index, test_inner_index in CV_inner.split(X):
-        print('Computing CV inner fold: {0}/{1}..'.format(k_out+1,K_inner))
-        X_train_inner = X[train_inner_index,:]
-        y_train_inner = y[train_inner_index]
-        X_test_inner = X[test_inner_index,:]
-        y_test_inner = y[test_inner_index]
+# START OF INNER FOLDS
+    for k2, (train_inner_index,test_inner_index) in enumerate(CV_inner.split(X_train_outer,y_train_outer)):
+        print('\tComputing CV inner fold: {0}/{1}..'.format(k2+1,K_inner))
+        # Inner cross validation loop. Use cross-validation to select optimal model.
+        X_train_inner_ANN = torch.Tensor(X[train_inner_index,:])
+        y_train_inner_ANN = torch.Tensor(y[train_inner_index])
+        X_test_inner_ANN = torch.Tensor(X[test_inner_index,:])
+        y_test_inner_ANN = torch.Tensor(y[test_inner_index])
 
-        error_inner_train[k_in] = np.square(y_train_inner-y_train_inner.mean()).sum()/y_train_inner.shape[0]
-        error_inner_test[k_in] = np.square(y_test_inner-y_test_inner.mean()).sum()/y_test_inner.shape[0]
+        # Initializing array that contains error for each model inside this k2 fold
+        validation_errors = []
 
-        k_in+=1
-    
+        # for each number of hidden units
+        for s in range(1,n_hidden_units+1):
+
+            # Setting up Sequential model
+            model = lambda: torch.nn.Sequential(
+                torch.nn.Linear(M, s), #M features to H hidden units
+                torch.nn.Tanh(),   
+                torch.nn.Linear(s, 1), # H hidden units to 1 output neuron
+            )
+
+            # Training neural network on inner data
+            net, final_loss, learning_curve = train_neural_net(model,
+                                                       loss_fn,
+                                                       X=X_train_inner_ANN,
+                                                       y=y_train_inner_ANN,
+                                                       n_replicates=n_replicates,
+                                                       max_iter=max_iter)
+
+
+            # Get predictions from ANN
+            y_predicted_inner_ANN = net(X_test_inner_ANN)
+
+            # Calculate validation error of model S and append to array of all validation errors
+            model_validation_error = (y_predicted_inner_ANN.float()-y_test_inner_ANN.float())**2
+            model_validation_error_rate = (sum(model_validation_error).type(torch.float)/len(y_test_inner_ANN)).data.numpy()[0]
+            validation_errors.append(model_validation_error_rate)
+            
+        
+        # Now we need to add the validation errors for this fold to an array containing errors for each inner fold
+        inner_validation_errors_ANN.append(validation_errors)
+
+
+
+# TRAINING FOR OUTER FOLDS
+
+# -------- BASELINE MODEL ---------
     # Compute squared error without using the input data at all
-    error_outer_train[k_out] = np.square(np.mean(y_train_outer)-y_train_outer).sum()/y_train_outer.shape[0]
-    error_outer_test[k_out] = np.square(np.mean(y_test_outer)-y_test_outer).sum()/y_test_outer.shape[0]
+    error_outer_train[k1] = np.square(np.mean(y_train_outer)-y_train_outer).sum()/y_train_outer.shape[0]
+    error_outer_test[k1] = np.square(np.mean(y_test_outer)-y_test_outer).sum()/y_test_outer.shape[0]
 
-    k_out+=1
+# -------- ANN MODEL -------------
+    # Performances for each model
+    model_gen_errors_ANN_per_inner_fold = [np.array([inner_validation_errors_ANN[i][j] for i in range(K_inner)]) for j in range(n_hidden_units)]
+
+    estimated_inner_gen_error_ANN = []
+    # Now, for each model S, compute inner generalization error
+    for s in range(0,len(model_gen_errors_ANN_per_inner_fold)):
+        s_inner_error = np.sum(np.multiply(len(y_test_inner_ANN),model_gen_errors_ANN_per_inner_fold[s])) / len(y_train_outer_ANN)
+        estimated_inner_gen_error_ANN.append(s_inner_error)
+
+    # Select optimal model:
+    optimal_estimated_inner_gen_error_ANN = min(estimated_inner_gen_error_ANN)
+    optimal_number_hidden_units = estimated_inner_gen_error_ANN.index(optimal_estimated_inner_gen_error_ANN) + 1
+
+    # Setting up Sequential model
+    model = lambda: torch.nn.Sequential(
+        torch.nn.Linear(M, optimal_number_hidden_units), #M features to H hidden units
+        torch.nn.Tanh(),   
+        torch.nn.Linear(optimal_number_hidden_units, 1), # H hidden units to 1 output neuron
+    )
+
+    # Training neural network on training outer data
+    net, final_loss, learning_curve = train_neural_net(model,
+                                                       loss_fn,
+                                                       X=X_train_outer_ANN,
+                                                       y=y_train_outer_ANN,
+                                                       n_replicates=n_replicates,
+                                                       max_iter=max_iter)
+    
+    # Get predictions from ANN
+    y_predicted_outer_ANN = net(X_test_outer_ANN)
+
+    # Calculate outer folds errors based on formula
+    outer_errors = (y_predicted_outer_ANN.float()-y_test_outer_ANN.float())**2
+    outer_error_rate = (sum(outer_errors).type(torch.float)/len(y_test_outer_ANN)).data.numpy()[0]
+    outer_fold_errors_ANN.append(outer_error_rate)
+
+    # Display the learning curve for the best net in the current fold
+    h, = summaries_axes[0].plot(learning_curve, color=color_list[k1])
+    h.set_label('CV fold {0}'.format(k1+1))
+    summaries_axes[0].set_xlabel('Iterations')
+    summaries_axes[0].set_xlim((0, max_iter))
+    summaries_axes[0].set_ylabel('Loss')
+    summaries_axes[0].set_title('Learning curves')
 
 
-print(error_inner_train)
-print(error_inner_test)
-print(error_outer_test)
-print(error_outer_train)
-
-## Estimate the generalization error
+# BASELINE MODEL RESULTS
 generalization_error_baseline_model = np.mean(error_outer_test)
 print('est gen error of baseline model: ' +str(round(generalization_error_baseline_model, ndigits=3))) 
+
+# ANN MODEL RESULTS
+
+    # Display the error rate across folds
+summaries_axes[1].bar(np.arange(1, K_outer+1), np.squeeze(np.asarray(outer_fold_errors_ANN)), color=color_list)
+summaries_axes[1].set_xlabel('Fold')
+summaries_axes[1].set_xticks(np.arange(1, K_outer+1))
+summaries_axes[1].set_ylabel('Error rate')
+summaries_axes[1].set_title('Test misclassification rates')
+
+print('Diagram of best neural net in last fold:')
+weights = [net[i].weight.data.numpy().T for i in [0,2]]
+biases = [net[i].bias.data.numpy() for i in [0,2]]
+tf =  [str(net[i]) for i in [0,2]]
+draw_neural_net(weights, biases, tf, attribute_names=regression_cols)
+
+# Print the average classification error rate
+print('\nGeneralization error/average error rate: {0}%'.format(round(np.mean(outer_fold_errors_ANN),4)))

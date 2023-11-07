@@ -86,18 +86,19 @@ for train_outer_index, test_outer_index in CV_outer.split(X):
 
     data_outer_test_length.append(float(len(y_test_outer)))
 
-    k_in = 0
 
-    # Choosing largest class on the training data
+    # Choosing most present class on the training data
     y_train = y_train_outer.flatten()
     y_test = y_test_outer.flatten()
     best_class = np.argmax(np.bincount(y_train))
     print(y_test_outer)
+
+    # Creating numpy array full of only best predicted class
     baseline_preds = best_class*np.ones((y_test_outer.shape[0],1))
-    # print(baseline_preds != y_test_outer)
+
+    # Compare predicted output to test
     bool_error = baseline_preds != y_test_outer
-    # bool_error = bool_error.flatten()
-    print(np.sum(baseline_preds != y_test_outer))
+
     # Estimate error by comparing y_test to largest class
     test_error_baseline[k_out]=(100*np.sum(baseline_preds != y_test_outer)/float(len(y_test_outer)))
     class_counts = np.bincount(y_test_outer.flatten())
