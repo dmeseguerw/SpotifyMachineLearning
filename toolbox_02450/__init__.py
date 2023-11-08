@@ -715,7 +715,7 @@ def train_neural_net(model, loss_fn, X, y,
             # display loss with some frequency:
             if (i != 0) & ((i+1) % logging_frequency == 0):
                 print_str = '\t\t' + str(i+1) + '\t' + str(loss_value) + '\t' + str(p_delta_loss)
-                print(print_str)
+                # print(print_str)
             # do backpropagation of loss and optimize weights 
             optimizer.zero_grad(); loss.backward(); optimizer.step()
             
