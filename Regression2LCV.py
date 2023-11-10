@@ -69,16 +69,16 @@ outer_fold_errors_BASELINE = []
 
 
 # ----------------Parameters for ANN --------------------
-n_hidden_units_range = np.array(range(1,5,3)) 
+n_hidden_units_range = np.array(range(1,5)) 
 # Calculating the loss with Mean Squared Error
 loss_fn = torch.nn.MSELoss()
 n_replicates = 1
-max_iter = 100
+max_iter = 10000
 outer_fold_errors_ANN = []
 optimal_hidden_units_array = []
 
 # ---------------Parameters for Linear Regression----------------
-linear_lambda_range = np.array(range(200,600,50))
+linear_lambda_range = np.array(range(200,600,25))
 outer_fold_errors_LIN = []
 optimal_lambda_array = []
 
@@ -220,7 +220,7 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
         # Calculate outer fold errors
     outer_errors_LIN = (y_predicted_outer_LIN-y_test_outer_LIN)**2
-    outer_error_rate_LIN = (sum(outer_errors_LIN)/len(y_test_outer_LIN))
+    outer_error_rate_LIN = (sum(outer_errors_LIN)/len(y_test_outer_LIN))[0]
     outer_fold_errors_LIN.append(outer_error_rate_LIN)
     print("\n-LINEAR REG OUTER FOLD error: ",outer_error_rate_LIN)
     print("-LINEAR REG OPTIMAL LAMBDA VALUE IN THIS FOLD: ",optimal_number_lambda)
@@ -283,42 +283,23 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
 print('----------------------- RESULTS -----------------------')
 print('Fold    Linear Regression    Artificial NN    Baseline')
-print('           l     Etest         h   Etest        Etest')
-for i in range(1,11,1):
-    resa = "  " + str(i) + "       " + str(optimal_lambda_array[i]) + "     " 
-    + str(outer_fold_errors_LIN[i]) + "         " + str(optimal_number_hidden_units[i] )
-    + "    " + str(outer_fold_errors_ANN[i]) + "         " + str(outer_fold_errors_BASELINE[i])
-print(resa)
+print('           l      Etest         h   Etest        Etest')
+for i in range(0,10):
+    resa = "  " + str(i) + "       " + str(optimal_lambda_array[i]) + "     " + str(round(outer_fold_errors_LIN[i],2)) + "       " + str(optimal_hidden_units_array[i] ) + "    " + str(round(outer_fold_errors_ANN[i],2)) + "        " + str(round(outer_fold_errors_BASELINE[i],2))
+    print(resa)
 
 # BASELINE MODEL RESULTS
 print("\n--------------------BASELINE MODEL--------------------")
-counter = 1
-for i in outer_fold_errors_BASELINE:
-    print("--Error for fold " + str(counter) + ": " + str(i))
-    counter=counter+1
-
 generalization_error_baseline_model = np.mean(outer_fold_errors_BASELINE)
 print('\n-Estimated generalization error for baseline model: ',round(generalization_error_baseline_model, ndigits=2))
 
 # LINEAR REGRESSION MODEL RESULTS
 print("\n--------------------LINEAR REGRESSION MODEL--------------------")
-counter = 1
-for i in outer_fold_errors_LIN:
-    print("--Error for fold " + str(counter) + ": " + str(i))
-    counter=counter+1
-
-print("\n-LINEAR REGRESSION OPTIMAL NUMBER OF LAMBDA PER FOLD: ")
-counter = 1
-for i in optimal_lambda_array:
-    print("--Error for fold " + str(counter) + ": " + str(i))
-    counter=counter+1
-
 generalization_error_linear_model = np.mean(outer_fold_errors_LIN)
 print('\n-Estimated generalization error for linear regression model: ' ,round(generalization_error_linear_model, ndigits=2))
 
 # ANN MODEL RESULTS
-print("ANN MODEL ERRORS: ",outer_fold_errors_ANN)
-print("ANN OPTIMAL NUMBER OF HIDDEN UNITS PER FOLD: ",optimal_hidden_units_array)
+print("\n--------------------ANN MODEL--------------------")
 generalization_error_ANN_model = np.mean(outer_fold_errors_ANN)
 print('Estimated generalization error of ANN model: ', round(generalization_error_ANN_model, ndigits=2))
 

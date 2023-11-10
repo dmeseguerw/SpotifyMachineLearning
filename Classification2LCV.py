@@ -168,5 +168,24 @@ print("BASELINE TEST ERRORS PER FOLD: ",test_error_baseline)
 print("KNN OPTIMAL NUMBERS PER FOLD: ", optimal_knn_numbers_array)
 print("KNN ERRORS: ",knn_outer_fold_errors)
 
+
+print('----------------------- RESULTS -----------------------')
+print('Fold    Logistic Regression       KNN           Baseline')
+print('           l      Etest         h   Etest        Etest')
+for i in range(0,10):
+    resa = "  " + str(i) + "       " + str(optimal_knn_numbers_array[i]) + "     " + str(round(knn_outer_fold_errors[i],2)) +  "        " + str(round(test_error_baseline[i],2))
+    print(resa)
+
+# BASELINE MODEL RESULTS
+print("\n--------------------BASELINE MODEL--------------------")
+generalization_error_baseline_model = np.mean(test_error_baseline)
+print('\n-Estimated generalization error for baseline model: ',round(generalization_error_baseline_model, ndigits=2))
+
+# LINEAR REGRESSION MODEL RESULTS
+print("\n--------------------KNN MODEL--------------------")
+generalization_error_knn_model = np.mean(knn_outer_fold_errors)
+print('\n-Estimated generalization error for KNN model: ' ,round(generalization_error_knn_model, ndigits=2))
+
+
 # generalization_error_KNN_model = np.sum(np.multiply(knn_outer_fold_errors,data_outer_test_length)) * (1/N)
 # print('est gen error of KNN model: ' +str(round(generalization_error_KNN_model, ndigits=3)))
