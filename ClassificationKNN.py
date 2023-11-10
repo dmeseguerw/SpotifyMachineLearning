@@ -66,7 +66,7 @@ CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 error_outer_train = np.empty((K_outer,1))
 error_outer_test = np.empty((K_outer,1))
 test_error_baseline = np.empty((K_outer,1))
-knn_number = 1
+knn_number = 11
 
 # ------------------- KNN PARAMETERS ---------------------
 # Distance metric (corresponds to 2nd norm, euclidean distance).
@@ -103,9 +103,9 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
         # Initializing array that contains error for each model inside this k2 fold
         knn_model_errors = []
-
+        s_values_array = []
         # for each number of hidden units
-        for s in range(1,knn_number+1):
+        for s in range(5,knn_number+1,1):
 
             # Fit classifier and classify the test points
             knclassifier = KNeighborsClassifier(n_neighbors=s, p=dist, 
@@ -118,7 +118,9 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
             knn_error_per_model = np.sum(y_est_inner_KNN != y_test_inner_KNN)/len(y_test_inner_KNN)
             knn_model_errors.append(knn_error_per_model)
+            s_values_array.append(s)
             # Now we need to add the validation errors for this fold to an array containing errors for each inner fold
+        print(s_values_array)
         knn_inner_validation_errors.append(knn_model_errors)
 
 # ------------------- OUTER FOLD KNN MODEL -------------------
@@ -130,11 +132,13 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     for s in range(0,len(errors_KNN_model_per_fold)):
         s_inner_error = np.sum(np.multiply(len(y_test_inner_KNN),errors_KNN_model_per_fold[s])) / len(y_train_outer)
         estimated_inner_gen_error_KNN.append(s_inner_error)
-
+    print(estimated_inner_gen_error_KNN)
     # Select optimal model:
     optimal_estimated_inner_gen_error_KNN = min(estimated_inner_gen_error_KNN)
-    optimal_knn_number = estimated_inner_gen_error_KNN.index(optimal_estimated_inner_gen_error_KNN) + 1
+    optimal_knn_number = s_values_array[estimated_inner_gen_error_KNN.index(optimal_estimated_inner_gen_error_KNN)]
+
     optimal_knn_numbers_array.append(optimal_knn_number)
+    print(optimal_knn_number)
     # Fit classifier and classify the test points
     knclassifier = KNeighborsClassifier(n_neighbors=optimal_knn_number, p=dist, 
                             metric=metric,

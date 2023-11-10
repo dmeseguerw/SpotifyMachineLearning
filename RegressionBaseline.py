@@ -57,8 +57,8 @@ N, M = X.shape
 y = df[['streams']].values
 
 # ---------------- STARTING K-Fold CV-------------------
-K_outer = 5
-K_inner = 5
+K_outer = 10
+K_inner = 10
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
 CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 # Initialize variable
@@ -67,12 +67,14 @@ error_outer_test = np.empty((K_outer,1))
 
 
 # ----------------Parameters for ANN--------------------
-n_hidden_units = 2 # This is S in 2 level cross validation algorithm
+n_hidden_units = 4 # This is S in 2 level cross validation algorithm
 # Calculating the loss with Mean Squared Error
 loss_fn = torch.nn.MSELoss()
 n_replicates = 1
-max_iter = 10000
+max_iter = 12000
 outer_fold_errors_ANN = []
+
+optimal_hidden_units_array = []
 
 for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     print('Computing CV outer fold: {0}/{1}..'.format(k1+1,K_outer))
@@ -105,10 +107,10 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
         # Initializing array that contains error for each model inside this k2 fold
         validation_errors = []
-
+        s_values_array = []
         # for each number of hidden units
         for s in range(1,n_hidden_units+1):
-
+            # print("S: ",s)
             # Setting up Sequential model
             model = lambda: torch.nn.Sequential(
                 torch.nn.Linear(M, s), #M features to H hidden units
@@ -132,7 +134,8 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
             model_validation_error = (y_predicted_inner_ANN.float()-y_test_inner_ANN.float())**2
             model_validation_error_rate = (sum(model_validation_error).type(torch.float)/len(y_test_inner_ANN)).data.numpy()[0]
             validation_errors.append(model_validation_error_rate)
-            
+            s_values_array.append(s)
+        print(s_values_array)
         
         # Now we need to add the validation errors for this fold to an array containing errors for each inner fold
         inner_validation_errors_ANN.append(validation_errors)
@@ -148,17 +151,20 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
 # -------- ANN MODEL -------------
     # Performances for each model
-    model_gen_errors_ANN_per_inner_fold = [np.array([inner_validation_errors_ANN[i][j] for i in range(K_inner)]) for j in range(n_hidden_units)]
-
+    model_gen_errors_ANN_per_inner_fold = [np.array([inner_validation_errors_ANN[i][j] for i in range(K_inner)]) for j in range(len(validation_errors))]
+    # print((model_gen_errors_ANN_per_inner_fold))
     estimated_inner_gen_error_ANN = []
     # Now, for each model S, compute inner generalization error
     for s in range(0,len(model_gen_errors_ANN_per_inner_fold)):
         s_inner_error = np.sum(np.multiply(len(y_test_inner_ANN),model_gen_errors_ANN_per_inner_fold[s])) / len(y_train_outer_ANN)
         estimated_inner_gen_error_ANN.append(s_inner_error)
+        # print(s)
 
     # Select optimal model:
     optimal_estimated_inner_gen_error_ANN = min(estimated_inner_gen_error_ANN)
-    optimal_number_hidden_units = estimated_inner_gen_error_ANN.index(optimal_estimated_inner_gen_error_ANN) + 1
+    optimal_number_hidden_units = s_values_array[estimated_inner_gen_error_ANN.index(optimal_estimated_inner_gen_error_ANN)]
+    print(optimal_number_hidden_units)
+    optimal_hidden_units_array.append(optimal_number_hidden_units)
 
     # Setting up Sequential model
     model = lambda: torch.nn.Sequential(
@@ -192,9 +198,13 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     summaries_axes[0].set_title('Learning curves')
 
 
+print("BASELINE MODEL ERRORS: ",error_outer_test)
+print("ANN MODEL ERRORS: ",outer_fold_errors_ANN)
+print("ANN OPTIMAL NUMBER OF HIDDEN UNITS PER FOLD: ",optimal_hidden_units_array)
+
 # BASELINE MODEL RESULTS
 generalization_error_baseline_model = np.mean(error_outer_test)
-print('est gen error of baseline model: ' +str(round(generalization_error_baseline_model, ndigits=3))) 
+print('Est gen error of baseline model: ' +str(round(generalization_error_baseline_model, ndigits=3))) 
 
 # ANN MODEL RESULTS
 
@@ -212,4 +222,4 @@ tf =  [str(net[i]) for i in [0,2]]
 draw_neural_net(weights, biases, tf, attribute_names=regression_cols)
 
 # Print the average classification error rate
-print('\nGeneralization error/average error rate: {0}%'.format(round(np.mean(outer_fold_errors_ANN),4)))
+print('\nANN Generalization error/average error rate: {0}'.format(round(np.mean(outer_fold_errors_ANN),4)))
