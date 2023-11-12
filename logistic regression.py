@@ -7,11 +7,11 @@
 # 
 # By successfully classifying songs into their most likely popular regions, we can gain valuable insights into regional musical trends and preferences. This could not only aid in understanding cultural inclinations but also serve practical purposes, such as guiding artists and record labels in tailoring their releases to suit specific regional tastes, thereby optimizing their chances of success in those markets.
 
-# In[27]:
+# In[12]:
 
 
 import pandas as pd
-
+import numpy as np
 # Loading the dataset
 file_path = "C:/Users/lydi_/OneDrive/Documents/DTU master , lectures and exercises/Introduction to Machine Learning and Data Mining/Projects/Project 2/SpotifyDataSet.csv"
 spotify_data = pd.read_csv(file_path)
@@ -20,7 +20,7 @@ spotify_data = pd.read_csv(file_path)
 spotify_data.head()
 
 
-# In[28]:
+# In[13]:
 
 
 from sklearn.model_selection import train_test_split
@@ -62,7 +62,7 @@ null_values=spotify_data_selected.isnull().sum()
 null_values
 
 
-# In[71]:
+# In[14]:
 
 
 #feature matrix
@@ -110,81 +110,77 @@ X.head()
 pip install category_encoders
 
 
-# In[73]:
+# In[15]:
 
 
 import category_encoders as ce
 encoder = ce.OneHotEncoder(cols=['language', 'artist_genre'], use_cat_names=True, drop_invariant=True)
 X_encoded = encoder.fit_transform(X)
-print(X_encoded.head())
 
 
-# In[75]:
+# In[18]:
 
 
 X=X_encoded
 
 
-# In[89]:
+# In[20]:
 
 
-from matplotlib.pylab import figure, plot, xlabel, ylabel, legend, ylim, show
-import sklearn.linear_model as lm
 from sklearn.model_selection import train_test_split
 
-#split the data into Training and testing data
-#purpose: to evaluate the model's performance on unseen data
-#method:use the train_test_split from sklearn.model_selection
-
+# Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-#fit logistic regression model
-model = lm.LogisticRegression(max_iter=1000)
-model=model.fit(X_train,y_train)
+
+# In[22]:
 
 
-# In[90]:
+from sklearn.preprocessing import StandardScaler
 
-
-#predict class labels and probabilitys 
-y_est=model.predict(X_test) #y_est will contain the predictes class labels
-y_est_prob=model.predict_proba(X_test) # will be a 2D array where each row 
-#corresponds to a sample, and each column corresponds to the probability of that sample belonging to one of the class
-
-
-# In[93]:
-
-
-#calculate the accuracy of the model which is the proportion of the correct predctions
-
-from sklearn.metrics import accuracy_score
-
-accuracy = accuracy_score(y_test, y_est)
-print(f"Accuracy: {accuracy:.2f}")
-
-
-# In[95]:
-
-
-#confusion matrix 
-#the confusion matrix shows the correct and incorrrect predictions for each class
-
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-cm = confusion_matrix(y_test, y_est)
-sns.heatmap(cm, annot=True, fmt='d')
-plt.xlabel('Predicted')
-plt.ylabel('True')
-plt.show()
+# Standardize the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
 
 # In[ ]:
 
 
-from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LogisticRegression
+import numpy as np
 
-cross_val_accuracy = cross_val_score(model, X, y, cv=5, scoring='accuracy')
-print(f"Cross-validated Accuracy: {np.mean(cross_val_accuracy):.2f}")
+# Define a range for the regularization strength
+lambda_interval = np.logspace(-8, 2, 50)
+train_error_rate = np.zeros(len(lambda_interval))
+test_error_rate = np.zeros(len(lambda_interval))
+coefficient_norm = np.zeros(len(lambda_interval))
+
+# Train the model and evaluate for multi-class
+for k in range(len(lambda_interval)):
+    mdl = LogisticRegression(penalty='l2', C=1/lambda_interval[k], max_iter=1000, multi_class='multinomial', solver='lbfgs')
+    mdl.fit(X_train_scaled, y_train)
+    
+    y_train_est = mdl.predict(X_train_scaled)
+    y_test_est = mdl.predict(X_test_scaled)
+    
+    train_error_rate[k] = np.mean(y_train_est != y_train)
+    test_error_rate[k] = np.mean(y_test_est != y_test)
+    coefficient_norm[k] = np.sqrt(np.sum(mdl.coef_**2))
+
+# Identify the optimal lambda
+min_error = np.min(test_error_rate)
+opt_lambda_idx = np.argmin(test_error_rate)
+opt_lambda = lambda_interval[opt_lambda_idx]
+
+# Use the model with the optimal lambda for predictions
+optimal_mdl = LogisticRegression(penalty='l2', C=1/opt_lambda, max_iter=10000, multi_class='multinomial', solver='saga')
+optimal_mdl.fit(X_train_scaled, y_train)
+y_test_pred = optimal_mdl.predict(X_test_scaled)
+
+# Evaluate the model
+accuracy = accuracy_score(y_test, y_test_pred)
+print(f"Accuracy: {accuracy}")
+print(classification_report(y_test, y_test_pred))
+print(confusion_matrix(y_test, y_test_pred))
 
