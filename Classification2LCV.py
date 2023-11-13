@@ -62,22 +62,30 @@ K_outer = 10
 K_inner = 10
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
 CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
-# Initialize variable
+
+# ------------------- BASELINE PARAMETERS ---------------------
 error_outer_train = np.empty((K_outer,1))
 error_outer_test = np.empty((K_outer,1))
 test_error_baseline = np.empty((K_outer,1))
-knn_number = 11
+
 
 # ------------------- KNN PARAMETERS ---------------------
 # Distance metric (corresponds to 2nd norm, euclidean distance).
 # You can set dist=1 to obtain manhattan distance (cityblock distance).
+knn_range = np.array(range(5,11))
 dist=2
 metric = 'minkowski'
 metric_params = {} # no parameters needed for minkowski
-
 knn_outer_fold_errors = []
 optimal_knn_numbers_array = []
 
+
+# ------------------- LOGISTIC PARAMETERS --------------------
+lambda_interval = np.logspace(0, 4, 20)
+logistic_outer_fold_errors = []
+optimal_logistic_numbers_array = []
+
+# STARTING OUTER FOLDS
 for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     print('Computing CV outer fold: {0}/{1}..'.format(k1+1,K_outer))
 
@@ -92,9 +100,13 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     error_inner_test = np.empty((K_inner,1))
 
     knn_inner_validation_errors = []
+    logistic_inner_validation_errors = []
+
 # START OF INNER FOLDS
     for k2, (train_inner_index,test_inner_index) in enumerate(CV_inner.split(X_train_outer,y_train_outer)):
         print('\tComputing CV inner fold: {0}/{1}..'.format(k2+1,K_inner))
+
+        # ------------ KNN INNER FOLDS -------------
         # Inner cross validation loop. Use cross-validation to select optimal model.
         X_train_inner_KNN = X[train_inner_index,:]
         y_train_inner_KNN = y[train_inner_index].flatten()
@@ -104,8 +116,8 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
         # Initializing array that contains error for each model inside this k2 fold
         knn_model_errors = []
         s_values_array = []
-        # for each number of hidden units
-        for s in range(5,knn_number+1,1):
+        # for each number of knn neigbors
+        for s in knn_range:
 
             # Fit classifier and classify the test points
             knclassifier = KNeighborsClassifier(n_neighbors=s, p=dist, 
@@ -120,8 +132,35 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
             knn_model_errors.append(knn_error_per_model)
             s_values_array.append(s)
             # Now we need to add the validation errors for this fold to an array containing errors for each inner fold
-        print(s_values_array)
+        # print(s_values_array)
         knn_inner_validation_errors.append(knn_model_errors)
+
+        # ----------- LOGISTIC REGRESSION INNER FOLDS --------------
+
+        X_train_inner_LOG = X[train_inner_index,:]
+        y_train_inner_LOG = y[train_inner_index].flatten()
+        X_test_inner_LOG = X[test_inner_index,:]
+        y_test_inner_LOG = y[test_inner_index].flatten()
+
+        # Initializing array that contains error for each model inside this k2 fold
+        logistic_model_errors = []
+        log_s_values_array = []
+        # for each number of lambda
+        for s in lambda_interval:
+
+            # Fit classifier and classify the test points
+            mdl = lm.LogisticRegression(penalty='l2', C=1/s, max_iter=1000, multi_class='multinomial', solver='lbfgs')
+            mdl.fit(X_train_inner_LOG, y_train_inner_LOG)
+            y_est_inner_LOG = mdl.predict(X_test_inner_LOG)
+
+            logistic_error_per_model = np.sum(y_est_inner_LOG != y_test_inner_LOG)/len(y_test_inner_LOG)
+            logistic_model_errors.append(logistic_error_per_model)
+            log_s_values_array.append(s)
+            # Now we need to add the validation errors for this fold to an array containing errors for each inner fold
+        # print(log_s_values_array)
+        logistic_inner_validation_errors.append(logistic_model_errors)
+
+
 
 # ------------------- OUTER FOLD KNN MODEL -------------------
     # Performances for each model
@@ -132,13 +171,13 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     for s in range(0,len(errors_KNN_model_per_fold)):
         s_inner_error = np.sum(np.multiply(len(y_test_inner_KNN),errors_KNN_model_per_fold[s])) / len(y_train_outer)
         estimated_inner_gen_error_KNN.append(s_inner_error)
-    print(estimated_inner_gen_error_KNN)
+    # print(estimated_inner_gen_error_KNN)
     # Select optimal model:
     optimal_estimated_inner_gen_error_KNN = min(estimated_inner_gen_error_KNN)
     optimal_knn_number = s_values_array[estimated_inner_gen_error_KNN.index(optimal_estimated_inner_gen_error_KNN)]
 
     optimal_knn_numbers_array.append(optimal_knn_number)
-    print(optimal_knn_number)
+    # print(optimal_knn_number)
     # Fit classifier and classify the test points
     knclassifier = KNeighborsClassifier(n_neighbors=optimal_knn_number, p=dist, 
                             metric=metric,
@@ -150,14 +189,41 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     knn_error_per_model = 100*np.sum(y_est_outer_KNN != y_test_outer)/len(y_test_outer)
     knn_outer_fold_errors.append(knn_error_per_model)
 
+
+# ------------------- OUTER FOLD LOGISTIC MODEL --------------------
+    # Performances for each model
+    errors_LOG_model_per_fold = [np.array([logistic_inner_validation_errors[i][j] for i in range(K_inner)]) for j in range(len(logistic_model_errors))]
+
+    estimated_inner_gen_error_LOG = []
+    # Now, for each model S, compute inner generalization error
+    for s in range(0,len(errors_LOG_model_per_fold)):
+        s_inner_error = np.sum(np.multiply(len(y_test_inner_LOG),errors_LOG_model_per_fold[s])) / len(y_train_outer)
+        estimated_inner_gen_error_LOG.append(s_inner_error)
+    # print(estimated_inner_gen_error_LOG)
+    # Select optimal model:
+    optimal_estimated_inner_gen_error_LOG = min(estimated_inner_gen_error_LOG)
+    optimal_logistic_number = log_s_values_array[estimated_inner_gen_error_LOG.index(optimal_estimated_inner_gen_error_LOG)]
+
+    optimal_logistic_numbers_array.append(optimal_logistic_number)
+    # print(optimal_logistic_number)
+    # Fit classifier and classify the test points
+    mdl = lm.LogisticRegression(penalty='l2', C=1/optimal_logistic_number, max_iter=1000, multi_class='multinomial', solver='lbfgs')
+    mdl.fit(X_train_inner_LOG, y_train_inner_LOG)
+    y_est_outer_LOG = mdl.predict(X_test_outer)
+
+    logistic_error_per_model = 100*np.sum(y_est_outer_LOG != y_test_outer)/len(y_test_outer)
+    logistic_outer_fold_errors.append(logistic_error_per_model)
+
+
+
 # ------------------- OUTER FOLD BASELINE MODEL --------------------
-    print(y_test_outer)
+    # print(y_test_outer)
     # Choosing most present class on the training data
     best_class = np.argmax(np.bincount(y_train_outer))
     # print(best_class)
     # Creating numpy array full of only best predicted class
     baseline_preds = best_class*np.ones((y_test_outer.shape[0],1))
-    print(baseline_preds.flatten())
+    # print(baseline_preds.flatten())
     # Compare predicted output to test
     bool_error = baseline_preds != y_test_outer
     # print(bool_error)
@@ -167,13 +233,15 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 print("BASELINE TEST ERRORS PER FOLD: ",test_error_baseline)
 print("KNN OPTIMAL NUMBERS PER FOLD: ", optimal_knn_numbers_array)
 print("KNN ERRORS: ",knn_outer_fold_errors)
+print("LOG OPTIMAL NUMBERS PER FOLD: ", optimal_logistic_numbers_array)
+print("LOG ERRORS: ",logistic_outer_fold_errors)
 
 
 print('----------------------- RESULTS -----------------------')
-print('Fold    Logistic Regression       KNN           Baseline')
-print('           l      Etest         h   Etest        Etest')
+print('Fold    Logistic Regression       K NN              Baseline')
+print('           l      Etest         k_num   Etest        Etest')
 for i in range(0,10):
-    resa = "  " + str(i) + "       " + str(optimal_knn_numbers_array[i]) + "     " + str(round(knn_outer_fold_errors[i],2)) +  "        " + str(round(test_error_baseline[i],2))
+    resa = "  " + str(i) + "       " + str(optimal_logistic_numbers_array[i]) + "     " + str(round(logistic_outer_fold_errors[i],2)) + "       " + str(optimal_knn_numbers_array[i] ) + "    " + str(round(knn_outer_fold_errors[i],2)) + "        " + str(round(test_error_baseline.flatten()[i],2))
     print(resa)
 
 # BASELINE MODEL RESULTS
@@ -181,10 +249,15 @@ print("\n--------------------BASELINE MODEL--------------------")
 generalization_error_baseline_model = np.mean(test_error_baseline)
 print('\n-Estimated generalization error for baseline model: ',round(generalization_error_baseline_model, ndigits=2))
 
-# LINEAR REGRESSION MODEL RESULTS
+# KNN MODEL RESULTS
 print("\n--------------------KNN MODEL--------------------")
 generalization_error_knn_model = np.mean(knn_outer_fold_errors)
 print('\n-Estimated generalization error for KNN model: ' ,round(generalization_error_knn_model, ndigits=2))
+
+# LOGISTIC REGRESSION MODEL RESULTS
+print("\n--------------------KNN MODEL--------------------")
+generalization_error_logistic_model = np.mean(logistic_outer_fold_errors)
+print('\n-Estimated generalization error for LOG model: ' ,round(generalization_error_logistic_model, ndigits=2))
 
 
 # generalization_error_KNN_model = np.sum(np.multiply(knn_outer_fold_errors,data_outer_test_length)) * (1/N)

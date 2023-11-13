@@ -58,8 +58,8 @@ N, M = X.shape
 y = df[['streams']].values
 
 # ---------------- STARTING K-Fold CV-------------------
-K_outer = 10
-K_inner = 10
+K_outer = 5
+K_inner = 5
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
 CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 # Initialize variable
@@ -78,7 +78,7 @@ outer_fold_errors_ANN = []
 optimal_hidden_units_array = []
 
 # ---------------Parameters for Linear Regression----------------
-linear_lambda_range = np.array(range(200,600,25))
+linear_lambda_range = np.array(range(100,1000,50))
 outer_fold_errors_LIN = []
 optimal_lambda_array = []
 
@@ -284,7 +284,7 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 print('----------------------- RESULTS -----------------------')
 print('Fold    Linear Regression    Artificial NN    Baseline')
 print('           l      Etest         h   Etest        Etest')
-for i in range(0,10):
+for i in range(0,k1):
     resa = "  " + str(i) + "       " + str(optimal_lambda_array[i]) + "     " + str(round(outer_fold_errors_LIN[i],2)) + "       " + str(optimal_hidden_units_array[i] ) + "    " + str(round(outer_fold_errors_ANN[i],2)) + "        " + str(round(outer_fold_errors_BASELINE[i],2))
     print(resa)
 
