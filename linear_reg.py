@@ -40,12 +40,3 @@ predictions=model.predict(X_test)
 mse=mean_squared_error(y_test,predictions)
 print('Mean Squared Error: ', mse)
 
-# plotting the output
-plt.figure(figsize=(8,6))
-plt.scatter(y_test, predictions, color='blue', label='Actual vs Predicted')
-plt.plot([min(y_test), max(y_test)],[min(y_test), max(y_test)], linestyle='--', color='red', linewidth=2, label='Perfect Prediction')
-plt.xlabel('Actual Value')
-plt.ylabel('Predicted Values')
-plt.title('Actual vs Predicted Values (Linear Regression)')
-plt.legend()
-plt.show()
