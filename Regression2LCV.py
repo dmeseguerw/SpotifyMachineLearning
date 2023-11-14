@@ -58,8 +58,8 @@ N, M = X.shape
 y = df[['streams']].values
 
 # ---------------- STARTING K-Fold CV-------------------
-K_outer = 5
-K_inner = 5
+K_outer = 2
+K_inner = 2
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
 CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 # Initialize variable
@@ -73,12 +73,12 @@ n_hidden_units_range = np.array(range(1,5))
 # Calculating the loss with Mean Squared Error
 loss_fn = torch.nn.MSELoss()
 n_replicates = 1
-max_iter = 10000
+max_iter = 100
 outer_fold_errors_ANN = []
 optimal_hidden_units_array = []
 
 # ---------------Parameters for Linear Regression----------------
-linear_lambda_range = np.array(range(100,1000,50))
+linear_lambda_range = np.array(range(100,1000,5))
 outer_fold_errors_LIN = []
 optimal_lambda_array = []
 
@@ -281,6 +281,38 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 #     summaries_axes[0].set_ylabel('Loss')
 #     summaries_axes[0].set_title('Learning curves')
 
+
+
+
+#--------------- Statistical Evaluation ------------------------------
+
+#--------------- Convert lists to numpy arrays for statistical analysis ----------
+
+quadratic_loss_ANN = np.array(outer_fold_errors_ANN)
+quadratic_loss_LR = np.array(outer_fold_errors_LIN)
+quadratic_loss_baseline = np.array(outer_fold_errors_BASELINE)
+
+
+
+# ANN vs Linear Regression
+t_statistic, p_value_ann_vs_lr = stats.ttest_rel(quadratic_loss_ANN, quadratic_loss_LR)
+print("ANN vs Linear Regression: p-value =", p_value_ann_vs_lr)
+
+# ANN vs Baseline
+t_statistic, p_value_ann_vs_baseline = stats.ttest_rel(quadratic_loss_ANN, quadratic_loss_baseline)
+print("ANN vs Baseline: p-value =", p_value_ann_vs_baseline)
+
+# Linear Regression vs Baseline
+t_statistic, p_value_lr_vs_baseline = stats.ttest_rel(quadratic_loss_LR, quadratic_loss_baseline)
+print("Linear Regression vs Baseline: p-value =", p_value_lr_vs_baseline) 
+
+
+
+
+
+
+
+  
 print('----------------------- RESULTS -----------------------')
 print('Fold    Linear Regression    Artificial NN    Baseline')
 print('           l      Etest         h   Etest        Etest')

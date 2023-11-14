@@ -13,6 +13,8 @@ import sklearn.linear_model as lm
 from sklearn import model_selection
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
+
+from toolbox_02450.statistics import correlated_ttest
 pd.options.mode.chained_assignment = None  # default='warn'
 
 # Read the CSV and create a pd df
@@ -44,6 +46,18 @@ df_class = df[classification_cols]
 regression_cols = ["artist_genre","language","region","loudness","speechiness","danceability","valence"]
 df_regression = df[regression_cols]
 
+
+
+
+#------------------- Define the quadratic loss function   -----------------
+def quadratic_loss(y_true, y_pred):
+    return np.mean((y_true - y_pred) ** 2)
+
+
+#------------------ Initialize arrays to store quadratic losses for each model ------------
+quadratic_loss_baseline = []
+quadratic_loss_knn = []
+quadratic_loss_logistic = []
 
 
 # ------------ DATA STANDARDIZATION -----------
@@ -188,6 +202,11 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
     knn_error_per_model = 100*np.sum(y_est_outer_KNN != y_test_outer)/len(y_test_outer)
     knn_outer_fold_errors.append(knn_error_per_model)
+    
+    
+    
+    loss_outer_knn = quadratic_loss(y_test_outer, y_est_outer_KNN)
+    quadratic_loss_knn.append(loss_outer_knn)
 
 
 # ------------------- OUTER FOLD LOGISTIC MODEL --------------------
@@ -213,7 +232,11 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
     logistic_error_per_model = 100*np.sum(y_est_outer_LOG != y_test_outer)/len(y_test_outer)
     logistic_outer_fold_errors.append(logistic_error_per_model)
-
+    
+    
+    
+    loss_outer_LOG = quadratic_loss(y_test_outer, y_est_outer_LOG)
+    quadratic_loss_logistic.append(loss_outer_LOG)
 
 
 # ------------------- OUTER FOLD BASELINE MODEL --------------------
@@ -229,6 +252,25 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
     # print(bool_error)
     # Estimate error by comparing y_test to largest class
     test_error_baseline[k1]=(100*np.sum(baseline_preds.flatten() != y_test_outer)/float(len(y_test_outer)))
+    
+    
+    
+    loss_outer_baseline = quadratic_loss(y_test_outer, baseline_preds.flatten())
+    quadratic_loss_baseline.append(loss_outer_baseline)
+    
+    
+
+#------------------statistical evaluation----------------------------------
+quadratic_loss_baseline = np.array(quadratic_loss_baseline)
+quadratic_loss_knn = np.array(quadratic_loss_knn)
+quadratic_loss_LOG = np.array(quadratic_loss_logistic)    
+
+
+# Perform the statistical evaluation (Setup II)
+p_value_baseline_vs_knn, CI_baseline_vs_knn = correlated_ttest((quadratic_loss_baseline - quadratic_loss_knn), rho=1/K_outer,alpha=0.05)
+p_value_baseline_vs_logistic, CI_baseline_vs_logistic = correlated_ttest(quadratic_loss_baseline - quadratic_loss_LOG, rho=1/K_outer,alpha=0.05)
+p_value_knn_vs_logistic, CI_knn_vs_logistic = correlated_ttest(quadratic_loss_knn - quadratic_loss_LOG, rho=1/K_outer,alpha=0.05)
+
 
 print("BASELINE TEST ERRORS PER FOLD: ",test_error_baseline)
 print("KNN OPTIMAL NUMBERS PER FOLD: ", optimal_knn_numbers_array)
@@ -240,7 +282,7 @@ print("LOG ERRORS: ",logistic_outer_fold_errors)
 print('----------------------- RESULTS -----------------------')
 print('Fold    Logistic Regression       K NN              Baseline')
 print('           l      Etest         k_num   Etest        Etest')
-for i in range(0,10):
+for i in range(0,k1):
     resa = "  " + str(i) + "       " + str(optimal_logistic_numbers_array[i]) + "     " + str(round(logistic_outer_fold_errors[i],2)) + "       " + str(optimal_knn_numbers_array[i] ) + "    " + str(round(knn_outer_fold_errors[i],2)) + "        " + str(round(test_error_baseline.flatten()[i],2))
     print(resa)
 
@@ -262,3 +304,10 @@ print('\n-Estimated generalization error for LOG model: ' ,round(generalization_
 
 # generalization_error_KNN_model = np.sum(np.multiply(knn_outer_fold_errors,data_outer_test_length)) * (1/N)
 # print('est gen error of KNN model: ' +str(round(generalization_error_KNN_model, ndigits=3)))
+
+
+# Print the results
+print("\nBaseline vs KNN: p-value =", p_value_baseline_vs_knn, "CI =", CI_baseline_vs_knn)
+print("Baseline vs Logistic Regression: p-value =", p_value_baseline_vs_logistic, "CI =", CI_baseline_vs_logistic)
+print("KNN vs Logistic Regression: p-value =", p_value_knn_vs_logistic, "CI =", CI_knn_vs_logistic)
+
