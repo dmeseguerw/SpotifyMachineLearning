@@ -58,8 +58,8 @@ N, M = X.shape
 y = df[['streams']].values
 
 # ---------------- STARTING K-Fold CV-------------------
-K_outer = 2
-K_inner = 2
+K_outer = 5
+K_inner = 5
 CV_outer = sklearn.model_selection.KFold(n_splits=K_outer,shuffle=True)
 CV_inner = sklearn.model_selection.KFold(n_splits=K_inner,shuffle=True)
 # Initialize variable
@@ -73,12 +73,12 @@ n_hidden_units_range = np.array(range(1,5))
 # Calculating the loss with Mean Squared Error
 loss_fn = torch.nn.MSELoss()
 n_replicates = 1
-max_iter = 100
+max_iter = 10000
 outer_fold_errors_ANN = []
 optimal_hidden_units_array = []
 
 # ---------------Parameters for Linear Regression----------------
-linear_lambda_range = np.array(range(100,1000,5))
+linear_lambda_range = np.array(range(100,1000,10))
 outer_fold_errors_LIN = []
 optimal_lambda_array = []
 
@@ -285,6 +285,15 @@ for k1,(train_outer_index, test_outer_index) in enumerate(CV_outer.split(X,y)):
 
 
 #--------------- Statistical Evaluation ------------------------------
+# Function to calculate confidence interval
+def compute_confidence_interval(data1, data2, alpha=0.05):
+    n = len(data1)
+    mean_diff = np.mean(data1) - np.mean(data2)
+    se_diff = np.sqrt(np.var(data1 - data2, ddof=1) / n)
+    t_critical = stats.t.ppf(1 - alpha/2, df=n-1)
+    ci_lower = mean_diff - t_critical * se_diff
+    ci_upper = mean_diff + t_critical * se_diff
+    return (ci_lower, ci_upper)
 
 #--------------- Convert lists to numpy arrays for statistical analysis ----------
 
@@ -296,15 +305,18 @@ quadratic_loss_baseline = np.array(outer_fold_errors_BASELINE)
 
 # ANN vs Linear Regression
 t_statistic, p_value_ann_vs_lr = stats.ttest_rel(quadratic_loss_ANN, quadratic_loss_LR)
-print("ANN vs Linear Regression: p-value =", p_value_ann_vs_lr)
+ci_ann_vs_lr = compute_confidence_interval(quadratic_loss_ANN, quadratic_loss_LR)
+print("ANN vs Linear Regression: p-value =", p_value_ann_vs_lr, "CI =", ci_ann_vs_lr)
 
 # ANN vs Baseline
 t_statistic, p_value_ann_vs_baseline = stats.ttest_rel(quadratic_loss_ANN, quadratic_loss_baseline)
-print("ANN vs Baseline: p-value =", p_value_ann_vs_baseline)
+ci_ann_vs_baseline = compute_confidence_interval(quadratic_loss_ANN, quadratic_loss_baseline)
+print("ANN vs Baseline: p-value =", p_value_ann_vs_baseline, "CI =", ci_ann_vs_baseline)
 
 # Linear Regression vs Baseline
 t_statistic, p_value_lr_vs_baseline = stats.ttest_rel(quadratic_loss_LR, quadratic_loss_baseline)
-print("Linear Regression vs Baseline: p-value =", p_value_lr_vs_baseline) 
+ci_lr_vs_baseline = compute_confidence_interval(quadratic_loss_LR, quadratic_loss_baseline)
+print("Linear Regression vs Baseline: p-value =", p_value_lr_vs_baseline, "CI =", ci_lr_vs_baseline) 
 
 
 
@@ -316,7 +328,7 @@ print("Linear Regression vs Baseline: p-value =", p_value_lr_vs_baseline)
 print('----------------------- RESULTS -----------------------')
 print('Fold    Linear Regression    Artificial NN    Baseline')
 print('           l      Etest         h   Etest        Etest')
-for i in range(0,k1):
+for i in range(0,k1+1):
     resa = "  " + str(i) + "       " + str(optimal_lambda_array[i]) + "     " + str(round(outer_fold_errors_LIN[i],2)) + "       " + str(optimal_hidden_units_array[i] ) + "    " + str(round(outer_fold_errors_ANN[i],2)) + "        " + str(round(outer_fold_errors_BASELINE[i],2))
     print(resa)
 

@@ -282,7 +282,7 @@ print("LOG ERRORS: ",logistic_outer_fold_errors)
 print('----------------------- RESULTS -----------------------')
 print('Fold    Logistic Regression       K NN              Baseline')
 print('           l      Etest         k_num   Etest        Etest')
-for i in range(0,k1):
+for i in range(0,k1+1):
     resa = "  " + str(i) + "       " + str(optimal_logistic_numbers_array[i]) + "     " + str(round(logistic_outer_fold_errors[i],2)) + "       " + str(optimal_knn_numbers_array[i] ) + "    " + str(round(knn_outer_fold_errors[i],2)) + "        " + str(round(test_error_baseline.flatten()[i],2))
     print(resa)
 
